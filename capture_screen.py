@@ -1,91 +1,65 @@
 # capture_screen.py
-
 from selenium import webdriver
-from PIL import Image
 import time
 import config
 import os
 import cv2
 import numpy as np
+from logger_setup import logger
 
 
-def capture_screen(driver, save_path='full_screen.png'):
-    """Capture une capture d'écran complète et détecte automatiquement la grille."""
-    print("Ajustement de la taille de la fenêtre pour capturer toute la page...")
-
-    # Utiliser JavaScript pour obtenir la hauteur totale de la page
-    total_width = driver.execute_script("return document.body.scrollWidth")
-    total_height = driver.execute_script("return document.body.scrollHeight")
-
-    # Ajuster la taille de la fenêtre
-    driver.set_window_size(total_width, total_height)
-    time.sleep(2)  # Attendre que la fenêtre se redimensionne
-
-    print(f"Taille de la fenêtre ajustée à {total_width}x{total_height} pixels.")
-
-    # Scroll to center (optional, for better capture)
-    driver.execute_script("window.scrollTo(arguments[0], arguments[1]);", total_width // 2, total_height // 2)
-    time.sleep(1)
-
-    print("Capture de l'écran en cours...")
-    # Prendre une capture d'écran complète
+def capture_screen(driver, save_path='cache/full_screen.png'):
+    logger.info("Capture de l'écran en cours...")
     driver.save_screenshot(save_path)
-
-    print(f"Capture d'écran complète sauvegardée à : {save_path}")
+    logger.info(f"Capture d'écran complète sauvegardée à : {save_path}")
     return save_path
 
 
 def detect_grid(image_path):
-    """Détecte la grille 2048 dans l'image en se basant sur la couleur du bord."""
-    print("Détection de la grille dans l'image...")
-
-    # Lire l'image avec OpenCV
+    logger.info("Détection de la grille dans l'image...")
     image = cv2.imread(image_path)
     if image is None:
-        print(f"Erreur : Impossible de lire l'image {image_path}")
+        logger.error(f"Impossible de lire l'image {image_path}")
         return None
 
-    # Convertir la couleur de l'image de BGR à RGB
-    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    # Détection simplifiée
+    # On suppose que la grille est détectée par couleur du bord
+    # Ajuster selon le site
+    # Ici, on fait comme avant, code simplifié
+    # ...
+    # Retour du path grid si trouvé
 
-    # Définir la couleur du bord en BGR
-    border_color = config.GRID_BORDER_COLOR  # (B, G, R)
+    # Pour simplifier, on prend le rectangle déjà connu (par exemple positions fixes)
+    # Ou réimplémenter la détection comme dans votre code précédent.
+    # Pour ce code, on suppose qu'on a déjà les routines :
 
-    # Définir la plage de tolérance
-    lower = np.array([c - config.COLOR_TOLERANCE for c in border_color])
-    upper = np.array([c + config.COLOR_TOLERANCE for c in border_color])
+    # Code d'exemple, à adapter selon vos besoins.
+    # On suppose qu'on a récupéré x,y,w,h pour la grille
+    # (exemple repris du code fourni, ajuster si besoin)
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    # Recherche du contour le plus grand comme avant
+    # Pour rester cohérent, je reprends le code de détection initial si vous l'aviez :
 
-    # Créer un masque pour les pixels de la couleur du bord
-    mask = cv2.inRange(image, lower, upper)
-
-    # Trouver les contours dans le masque
+    border_color_bgr = config.GRID_BORDER_COLOR
+    border_color_hsv = cv2.cvtColor(np.uint8([[border_color_bgr]]), cv2.COLOR_BGR2HSV)[0][0]
+    lower = np.array([border_color_hsv[0] - 10, max(border_color_hsv[1] - 50, 50), max(border_color_hsv[2] - 50, 50)])
+    upper = np.array([border_color_hsv[0] + 10, 255, 255])
+    mask = cv2.inRange(hsv, lower, upper)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
     if not contours:
-        print("Erreur : Aucune grille détectée.")
+        logger.error("Aucune grille détectée.")
         return None
-
-    # Supposer que le plus grand contour est la grille
     largest_contour = max(contours, key=cv2.contourArea)
-
-    # Obtenir le rectangle englobant
     x, y, w, h = cv2.boundingRect(largest_contour)
-
-    print(f"Grille détectée à la position x:{x}, y:{y}, largeur:{w}, hauteur:{h}")
-
-    # Ajouter un padding si nécessaire
-    padding = 10  # pixels
+    logger.info(f"Grille détectée à la position x:{x}, y:{y}, largeur:{w}, hauteur:{h}")
+    padding = 10
     x = max(x - padding, 0)
     y = max(y - padding, 0)
     w = min(w + 2 * padding, image.shape[1] - x)
     h = min(h + 2 * padding, image.shape[0] - y)
 
-    # Découper la grille de l'image
     grid_image = image[y:y + h, x:x + w]
-    grid_image_pil = Image.fromarray(cv2.cvtColor(grid_image, cv2.COLOR_BGR2RGB))
-
-    grid_image_path = os.path.join(config.CACHE_FOLDER, 'grid.png')
-    grid_image_pil.save(grid_image_path)
-
-    print(f"Capture de la grille sauvegardée à : {grid_image_path}")
-    return grid_image_path
+    grid_image_pil_path = os.path.join(config.CACHE_FOLDER, 'grid.png')
+    cv2.imwrite(grid_image_pil_path, grid_image)
+    logger.info(f"Capture de la grille sauvegardée à : {grid_image_pil_path}")
+    return grid_image_pil_path
